@@ -8,6 +8,7 @@ e instala releases versionados publicados no GitHub.
 ## Recursos
 
 - Liga e desliga o LED pela interface web.
+- Usa uma interface dark responsiva por padrao.
 - Ajusta a intensidade manualmente entre 0 e 100%.
 - Alterna automaticamente para o ultimo controle movimentado.
 - Configura o Wi-Fi por um portal cativo, sem senha da rede no codigo.
