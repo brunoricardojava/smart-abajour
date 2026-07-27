@@ -10,6 +10,7 @@ class NetworkManager {
 
   bool isConnected() const;
   bool isPortalActive() const;
+  bool isResetPending() const;
   String ipAddress() const;
   int32_t signalStrength() const;
   const String& setupAccessPointName() const;

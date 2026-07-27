@@ -6,6 +6,7 @@
 #include "services/NetworkManager.h"
 #include "services/OtaUpdateService.h"
 #include "services/SettingsStore.h"
+#include "services/StatusIndicator.h"
 #include "services/WebServerService.h"
 
 namespace {
@@ -14,6 +15,7 @@ LedController ledController(appState);
 NetworkManager networkManager;
 OtaUpdateService otaUpdateService;
 SettingsStore settingsStore;
+StatusIndicator statusIndicator;
 WebServerService webServer(appState, networkManager, settingsStore,
                            otaUpdateService);
 portMUX_TYPE watchdogMutex = portMUX_INITIALIZER_UNLOCKED;
@@ -61,6 +63,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println("Iniciando controle inteligente do LED");
+  statusIndicator.begin();
   if (!startApplicationWatchdog()) {
     delay(1000);
     ESP.restart();
@@ -87,10 +90,21 @@ void loop() {
     settingsStore.scheduleSave();
   }
   settingsStore.update(appState);
+
+  const uint32_t now = millis();
+  static uint32_t lastStatusIndicatorUpdateMs = 0;
+  if (now - lastStatusIndicatorUpdateMs >=
+      AppConfig::STATUS_LED_UPDATE_INTERVAL_MS) {
+    lastStatusIndicatorUpdateMs = now;
+    OtaSnapshot otaState;
+    otaUpdateService.getSnapshot(otaState);
+    statusIndicator.update(now, networkManager.isConnected(),
+                           networkManager.isPortalActive(),
+                           networkManager.isResetPending(), otaState.status);
+  }
   feedApplicationWatchdog();
 
   static uint32_t lastSerialUpdateMs = 0;
-  const uint32_t now = millis();
   if (now - lastSerialUpdateMs >= AppConfig::SERIAL_INTERVAL_MS) {
     lastSerialUpdateMs = now;
     Serial.printf("Modo: %s | ADC: %u | Saida: %u%% | Wi-Fi: %s\n",

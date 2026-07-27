@@ -13,6 +13,9 @@
 namespace AppConfig {
 constexpr uint8_t POT_PIN = 32;
 constexpr uint8_t LED_PIN = 25;
+constexpr uint8_t STATUS_LED_PIN = LED_BUILTIN;
+constexpr bool STATUS_LED_ACTIVE_HIGH = true;
+constexpr uint32_t STATUS_LED_UPDATE_INTERVAL_MS = 10;
 constexpr uint8_t PWM_CHANNEL = 0;
 constexpr uint32_t PWM_FREQUENCY_HZ = 5000;
 constexpr uint8_t PWM_RESOLUTION_BITS = 12;
@@ -51,4 +54,9 @@ constexpr char HOSTNAME[] = "esp32-led";
 constexpr char SETUP_AP_PREFIX[] = "CONFIGURE-LED";
 constexpr char SETUP_AP_PASSWORD[] = "configure-led";
 constexpr uint16_t WIFI_CONNECT_TIMEOUT_SECONDS = 15;
+
+static_assert(STATUS_LED_PIN != POT_PIN,
+              "Status LED must not share the potentiometer pin");
+static_assert(STATUS_LED_PIN != LED_PIN,
+              "Status LED must not share the controlled LED pin");
 }  // namespace AppConfig

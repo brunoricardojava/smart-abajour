@@ -96,6 +96,8 @@ bool NetworkManager::isConnected() const {
 
 bool NetworkManager::isPortalActive() const { return portalActive_; }
 
+bool NetworkManager::isResetPending() const { return resetPending_; }
+
 String NetworkManager::ipAddress() const {
   return isConnected() ? WiFi.localIP().toString() : String("0.0.0.0");
 }

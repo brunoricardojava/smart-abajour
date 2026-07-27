@@ -31,6 +31,10 @@ mesma rede local pode controlar o LED ou iniciar uma atualizacao oficial.
 - Resistor de 220 a 330 ohms
 - Protoboard e jumpers
 
+A placa possui um LED azul controlavel no GPIO2 e um LED vermelho que normalmente
+indica apenas a presenca de alimentacao. O firmware usa o azul para comunicar o
+estado do dispositivo sem interferir no LED verde controlado pelo GPIO25.
+
 ## Ligacoes
 
 Monte o circuito com a placa desligada.
@@ -142,6 +146,27 @@ leituras consecutivas, evitando que ruido eletrico roube o controle da web.
 Quando a web assume, a posicao atual do potenciometro vira a nova referencia.
 Ele so volta a controlar depois de ser realmente movimentado. A pagina mostra
 sempre qual foi a ultima fonte utilizada.
+
+## Indicador de status
+
+O LED azul embarcado representa os estados mais importantes. Todos os padroes
+sao temporizados sem bloquear o controle do LED, a interface web ou o OTA.
+
+| Estado | Padrao do LED azul |
+| --- | --- |
+| Inicializando ou reiniciando | Aceso continuamente |
+| Operacao normal | Pulso de 60 ms a cada 3 segundos |
+| Portal de configuracao | Dois flashes curtos a cada 2 segundos |
+| Reconectando ao Wi-Fi | 200 ms aceso e 800 ms apagado |
+| Consultando atualizacao | 500 ms aceso e 500 ms apagado |
+| Atualizacao disponivel | Dois flashes curtos a cada 5 segundos |
+| Baixando firmware | Pisca rapidamente, 100 ms aceso e 100 ms apagado |
+| Verificando firmware | Aceso com uma pausa de 100 ms a cada segundo |
+| Erro OTA | Tres flashes curtos a cada 4 segundos |
+
+Cada mudanca de estado tambem e registrada no monitor serial. O GPIO2 e um pino
+de inicializacao do ESP32 e nao deve receber pull-up, resistor ou carga externa;
+o uso pelo firmware se limita ao LED que ja faz parte da placa.
 
 ## Atualizacao do firmware
 
@@ -283,7 +308,10 @@ src/
     NetworkManager.*          Wi-Fi, portal cativo e mDNS
     OtaUpdateService.*        consulta, download, validacao e rollback OTA
     SettingsStore.*           preferencias persistentes
+    StatusIndicator.*         prioridade e acionamento do LED azul
     WebServerService.*        rotas HTTP e validacao da API
+  status/
+    StatusPattern.*           padroes temporais testados no build
   web/
     WebPage.h                 HTML, CSS e JavaScript embarcados
   main.cpp                    inicializacao e coordenacao dos modulos
@@ -297,6 +325,7 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 
 - ADC e PWM usam 12 bits, com valores entre 0 e 4095.
 - O PWM opera em 5 kHz no canal 0.
+- O indicador de status usa saida digital no GPIO2 e nao ocupa canal PWM.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
 - O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
 - Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada
