@@ -14,6 +14,7 @@ void NetworkManager::begin() {
   setupAccessPointName_ = accessPointName;
 
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
   WiFi.setHostname(AppConfig::HOSTNAME);
   WiFi.setAutoReconnect(true);
 

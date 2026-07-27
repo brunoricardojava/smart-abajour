@@ -22,6 +22,6 @@ class LedController {
   ControlMode observedControlMode_ = ControlMode::Potentiometer;
   uint32_t observedWebInteractionRevision_ = 0;
 
-  bool readPotentiometer();
+  bool readPotentiometer(uint8_t samples);
   void applyOutput();
 };

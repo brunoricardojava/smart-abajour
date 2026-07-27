@@ -226,6 +226,7 @@ const char WEB_PAGE[] PROGMEM = R"HTML(
     let lastInteraction = 0;
     let sliderTimer = 0;
     let toastTimer = 0;
+    let refreshTimer = 0;
     let refreshing = false;
 
     function showToast(message) {
@@ -255,6 +256,9 @@ const char WEB_PAGE[] PROGMEM = R"HTML(
       }
       return label;
     }
+    function isOtaBusy() {
+      return state && ['checking','downloading','verifying','rebooting'].includes(state.otaStatus);
+    }
     function render() {
       if (!state) return;
       const usePot = state.mode === 'potentiometer';
@@ -276,7 +280,7 @@ const char WEB_PAGE[] PROGMEM = R"HTML(
       ui.adc.textContent = state.potentiometerAdc + ' / 4095';
       ui.firmwareCurrent.textContent = state.firmwareVersion + ' (' + state.firmwareBuild + ')';
       ui.firmwareStatus.textContent = otaLabel();
-      const otaBusy = ['checking','downloading','verifying','rebooting'].includes(state.otaStatus);
+      const otaBusy = isOtaBusy();
       const showProgress = ['downloading','verifying'].includes(state.otaStatus);
       ui.otaProgress.hidden = !showProgress;
       ui.otaProgress.value = state.otaProgress;
@@ -303,6 +307,17 @@ const char WEB_PAGE[] PROGMEM = R"HTML(
         clearTimeout(timeout);
         refreshing = false;
       }
+    }
+    function nextRefreshDelay() {
+      if (isOtaBusy()) return 500;
+      return document.hidden ? 15000 : 1000;
+    }
+    function scheduleRefresh(delay = nextRefreshDelay()) {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        await refresh();
+        scheduleRefresh();
+      }, delay);
     }
     async function control(values) {
       lastInteraction = Date.now();
@@ -412,8 +427,8 @@ const char WEB_PAGE[] PROGMEM = R"HTML(
     syncDeviceDetails(desktopQuery);
     if (desktopQuery.addEventListener) desktopQuery.addEventListener('change', syncDeviceDetails);
     else desktopQuery.addListener(syncDeviceDetails);
-    refresh();
-    setInterval(refresh, 1000);
+    document.addEventListener('visibilitychange', () => scheduleRefresh(document.hidden ? nextRefreshDelay() : 0));
+    refresh().finally(() => scheduleRefresh());
   </script>
 </body>
 </html>

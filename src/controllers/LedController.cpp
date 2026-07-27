@@ -27,22 +27,30 @@ bool LedController::update() {
 
   bool settingsChanged = false;
   const uint32_t now = millis();
-  if (now - lastAdcReadMs_ >= AppConfig::ADC_INTERVAL_MS) {
+  const bool waitingForPhysicalInteraction =
+      state_.controlMode == ControlMode::Web || !state_.powerOn;
+  const uint32_t adcInterval =
+      waitingForPhysicalInteraction ? AppConfig::ADC_IDLE_INTERVAL_MS
+                                    : AppConfig::ADC_ACTIVE_INTERVAL_MS;
+  const uint8_t adcSamples =
+      waitingForPhysicalInteraction ? AppConfig::ADC_IDLE_SAMPLES
+                                    : AppConfig::ADC_ACTIVE_SAMPLES;
+  if (now - lastAdcReadMs_ >= adcInterval) {
     lastAdcReadMs_ = now;
-    settingsChanged = readPotentiometer();
+    settingsChanged = readPotentiometer(adcSamples);
   }
 
   applyOutput();
   return settingsChanged;
 }
 
-bool LedController::readPotentiometer() {
+bool LedController::readPotentiometer(uint8_t samples) {
   uint32_t sum = 0;
-  for (uint8_t sample = 0; sample < AppConfig::ADC_SAMPLES; ++sample) {
+  for (uint8_t sample = 0; sample < samples; ++sample) {
     sum += analogRead(AppConfig::POT_PIN);
   }
 
-  state_.potentiometerAdc = sum / AppConfig::ADC_SAMPLES;
+  state_.potentiometerAdc = sum / samples;
   state_.potentiometerBrightness = static_cast<uint8_t>(
       (static_cast<uint32_t>(state_.potentiometerAdc) * 100U +
        AppConfig::PWM_MAX / 2U) /

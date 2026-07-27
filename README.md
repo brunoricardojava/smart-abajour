@@ -80,6 +80,30 @@ A versao compilada vem do arquivo `VERSION`. O build tambem inclui os sete
 primeiros caracteres do commit Git atual. A tabela `partitions.csv` reserva dois
 slots de 1.280 KiB para permitir atualizacao e rollback OTA.
 
+## Preview local da interface
+
+A interface pode ser validada sem ESP32 e sem instalar dependencias adicionais:
+
+```bash
+python3 scripts/web_preview.py
+```
+
+Abra `http://localhost:8000`. O servidor extrai diretamente o HTML de
+`src/web/WebPage.h`, portanto o preview usa a mesma pagina incorporada ao
+firmware. A API simulada permite testar o botao de energia, slider, restauracao,
+reconfiguracao de Wi-Fi e o fluxo completo de OTA com progresso e reinicio.
+
+Por padrao, a consulta OTA simulada oferece a proxima versao patch. Para escolher
+outra versao:
+
+```bash
+python3 scripts/web_preview.py --update-version 2.0.0
+```
+
+Use `Ctrl+C` para encerrar. O preview valida HTML, CSS, JavaScript e integracao
+com a API, mas nao substitui testes do PWM, potenciometro, Wi-Fi, TLS ou gravacao
+nas particoes da placa.
+
 ## Primeira configuracao Wi-Fi
 
 1. Grave o firmware e reinicie o ESP32.
@@ -273,14 +297,22 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 
 - ADC e PWM usam 12 bits, com valores entre 0 e 4095.
 - O PWM opera em 5 kHz no canal 0.
-- Cada leitura usa a media de 16 amostras a cada 20 ms.
+- A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
+- O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
+- Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada
+  20 ms. Sob controle web ou com o LED desligado, usa 4 amostras a cada 40 ms.
 - O potenciometro assume apos variar 2% em duas leituras consecutivas.
-- A interface consulta o estado a cada segundo.
+- A interface consulta o estado a cada segundo enquanto visivel, a cada 15
+  segundos em segundo plano e a cada 500 ms durante uma operacao OTA.
 - Alteracoes do slider sao limitadas para evitar excesso de requisicoes.
 - Gravacoes de preferencias sao agrupadas e atrasadas em um segundo para
   reduzir o desgaste da memoria flash.
 - O download OTA ocorre em uma tarefa separada e usa blocos de 4 KiB.
 - A imagem so e ativada depois que tamanho, target e SHA-256 forem validados.
+
+`Light sleep` manual e `deep sleep` nao sao usados porque interromperiam o
+servidor web, mDNS, Wi-Fi ou PWM. O modo `WIFI_PS_MAX_MODEM` tambem nao e
+habilitado por padrao porque pode perder trafego multicast em alguns roteadores.
 
 ## Acesso a porta serial no Ubuntu
 

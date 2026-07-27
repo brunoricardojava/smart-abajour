@@ -43,8 +43,16 @@ bool startApplicationWatchdog() {
 }
 
 void feedApplicationWatchdog() {
+  static uint32_t lastFeedAtMs = 0;
+  const uint32_t now = millis();
+  if (now - lastFeedAtMs <
+      AppConfig::APPLICATION_WATCHDOG_FEED_INTERVAL_MS) {
+    return;
+  }
+  lastFeedAtMs = now;
+
   portENTER_CRITICAL(&watchdogMutex);
-  watchdogHeartbeatMs = millis();
+  watchdogHeartbeatMs = now;
   portEXIT_CRITICAL(&watchdogMutex);
 }
 }  // namespace
@@ -91,4 +99,6 @@ void loop() {
                   appState.potentiometerAdc, appState.outputBrightness,
                   networkManager.isConnected() ? "conectado" : "configurando");
   }
+
+  delay(AppConfig::LOOP_IDLE_DELAY_MS);
 }
