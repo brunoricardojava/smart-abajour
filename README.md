@@ -36,7 +36,7 @@ mesma rede local pode controlar o LED ou iniciar uma atualizacao oficial.
 
 A placa possui um LED azul controlavel no GPIO2 e um LED vermelho que normalmente
 indica apenas a presenca de alimentacao. O firmware usa o azul para comunicar o
-estado do dispositivo sem interferir no LED verde controlado pelo GPIO25.
+estado do dispositivo sem interferir no LED verde controlado pelo GPIO23.
 
 ## Ligacoes
 
@@ -46,17 +46,18 @@ Monte o circuito com a placa desligada.
 
 ```text
 ESP32 3V3  -------- terminal externo
-ESP32 GPIO32 ----- terminal central (cursor)
+ESP32 GPIO34 ----- terminal central (cursor)
 ESP32 GND  -------- outro terminal externo
 ```
 
 Troque os dois terminais externos se o sentido de giro ficar invertido. O
-GPIO32 pertence ao ADC1 e pode ser usado simultaneamente com o Wi-Fi.
+GPIO34 pertence ao ADC1, nao possui funcao touch e pode ser usado
+simultaneamente com o Wi-Fi.
 
 ### LED
 
 ```text
-ESP32 GPIO25 ----- resistor 220/330 ohms ----- anodo do LED
+ESP32 GPIO23 ----- resistor 220/330 ohms ----- anodo do LED
                                                     |
                                                catodo ----- GND
 ```
@@ -350,13 +351,15 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 - ADC e PWM usam 12 bits, com valores entre 0 e 4095.
 - O PWM opera em 5 kHz no canal 0.
 - O indicador de status usa saida digital no GPIO2 e nao ocupa canal PWM.
-- A chave capacitiva usa o canal touch T8 no GPIO33, com leitura a cada 20 ms.
-- O touch calibra 32 amostras no inicio, usa histerese e aciona na primeira
-  amostra valida, em ate 20 ms. So rearma depois de uma soltura estavel por
-  300 ms. Uma leitura que permanecer ativa por 15 segundos e recalibrada para
-  evitar travamento por deriva ambiental ou ruido continuo.
-- Como GPIO32 e GPIO33 compartilham o periferico RTC, o firmware restaura T8
-  depois de cada lote ADC e aguarda o proximo intervalo antes de ler o touch.
+- A chave capacitiva usa o canal touch T8 no GPIO33, com leitura filtrada pelo
+  driver do ESP-IDF e avaliacao a cada 20 ms.
+- O touch descarta as quatro amostras mais altas e mais baixas da calibracao,
+  rejeita calibracoes instaveis e usa histerese. A pressao precisa permanecer
+  valida por duas leituras; uma amostra isolada ou invalida nao aciona o LED.
+- O rearme exige uma soltura estavel por 300 ms. Se a entrada permanecer ativa
+  por 15 segundos, o firmware aguarda uma soltura confiavel antes de recalibrar.
+- O potenciometro usa GPIO34, que nao e canal touch. O PWM usa GPIO23, fora do
+  dominio RTC e afastado fisicamente do GPIO33 no chip.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
 - O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
 - Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada

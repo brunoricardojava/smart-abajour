@@ -1,8 +1,12 @@
 #include "controllers/LedController.h"
 
 #include <driver/touch_sensor.h>
+#include <soc/touch_sensor_channel.h>
 
 #include "AppConfig.h"
+
+static_assert(AppConfig::TOUCH_PIN == TOUCH_PAD_NUM8_GPIO_NUM,
+              "Configured touch GPIO must match T8");
 
 LedController::LedController(AppState& state) : state_(state) {}
 
@@ -16,18 +20,61 @@ void LedController::begin() {
   ledcWrite(AppConfig::PWM_CHANNEL, 0);
 
   lastTouchReadMs_ = millis();
-  touchButtonState_ = TouchButtonState(false, false, lastTouchReadMs_);
+  touchButtonState_ =
+      TouchButtonState(false, false, lastTouchReadMs_, lastTouchReadMs_);
+
+  esp_err_t touchStatus = touch_pad_init();
+  if (touchStatus == ESP_OK) {
+    touchStatus = touch_pad_set_voltage(TOUCH_HVOLT_2V7, TOUCH_LVOLT_0V5,
+                                        TOUCH_HVOLT_ATTEN_1V);
+  }
+  if (touchStatus == ESP_OK) {
+    touchStatus = touch_pad_set_cnt_mode(
+        TOUCH_PAD_NUM8, TOUCH_PAD_SLOPE_7, TOUCH_PAD_TIE_OPT_LOW);
+  }
+  if (touchStatus == ESP_OK) {
+    touchStatus = touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
+  }
+  if (touchStatus == ESP_OK) {
+    touchStatus =
+        touch_pad_config(TOUCH_PAD_NUM8, SOC_TOUCH_PAD_THRESHOLD_MAX);
+  }
+  if (touchStatus == ESP_OK) {
+    touchStatus = touch_pad_filter_start(AppConfig::TOUCH_FILTER_PERIOD_MS);
+  }
+
+  touchDriverReady_ = touchStatus == ESP_OK;
+  if (!touchDriverReady_) {
+    Serial.printf("Falha ao configurar touch T8: %s\n",
+                  esp_err_to_name(touchStatus));
+  }
 }
 
 void LedController::calibrateTouch() {
-  for (uint8_t sample = 0; sample < AppConfig::TOUCH_CALIBRATION_SAMPLES;
-       ++sample) {
+  if (!touchDriverReady_) {
+    return;
+  }
+
+  // Calibrate with the potentiometer and PWM already in their operating state.
+  readPotentiometer(AppConfig::ADC_ACTIVE_SAMPLES);
+  applyOutput();
+  delay(AppConfig::TOUCH_FILTER_WARMUP_MS);
+
+  const uint16_t maximumAttempts =
+      AppConfig::TOUCH_CALIBRATION_SAMPLES *
+      AppConfig::TOUCH_CALIBRATION_MAX_ATTEMPT_MULTIPLIER;
+  for (uint16_t attempt = 0;
+       attempt < maximumAttempts && !touchCalibrated_; ++attempt) {
     readTouch(millis());
-    if (sample + 1U < AppConfig::TOUCH_CALIBRATION_SAMPLES) {
+    if (attempt + 1U < maximumAttempts && !touchCalibrated_) {
       delay(AppConfig::TOUCH_READ_INTERVAL_MS);
     }
   }
   lastTouchReadMs_ = millis();
+
+  if (!touchCalibrated_) {
+    Serial.println("Touch ainda sem calibracao valida; tentando no loop");
+  }
 }
 
 bool LedController::update() {
@@ -69,10 +116,6 @@ bool LedController::readPotentiometer(uint8_t samples) {
   for (uint8_t sample = 0; sample < samples; ++sample) {
     sum += analogRead(AppConfig::POT_PIN);
   }
-
-  // ADC on GPIO32 retasks the shared RTC peripheral. Restore T8 now so it has
-  // a full sampling interval to settle before the next capacitive reading.
-  touch_pad_config(TOUCH_PAD_NUM8, SOC_TOUCH_PAD_THRESHOLD_MAX);
 
   state_.potentiometerAdc = sum / samples;
   state_.potentiometerBrightness = static_cast<uint8_t>(
@@ -121,8 +164,18 @@ bool LedController::readPotentiometer(uint8_t samples) {
 }
 
 bool LedController::readTouch(uint32_t now) {
-  touchValue_ = touchRead(AppConfig::TOUCH_PIN);
-  if (touchValue_ == 0) {
+  if (!touchDriverReady_) {
+    return false;
+  }
+
+  const esp_err_t rawStatus =
+      touch_pad_read_raw_data(TOUCH_PAD_NUM8, &touchRawValue_);
+  const esp_err_t filteredStatus =
+      touch_pad_read_filtered(TOUCH_PAD_NUM8, &touchValue_);
+  if (rawStatus != ESP_OK || filteredStatus != ESP_OK || touchRawValue_ == 0 ||
+      touchValue_ == 0) {
+    touchButtonState_ = cancelTouchCandidate(touchButtonState_, now);
+    touchRecoveryReleaseCandidate_ = false;
     if (consecutiveInvalidTouchReadings_ <
         AppConfig::TOUCH_INVALID_WARNING_COUNT) {
       ++consecutiveInvalidTouchReadings_;
@@ -136,38 +189,40 @@ bool LedController::readTouch(uint32_t now) {
   consecutiveInvalidTouchReadings_ = 0;
 
   if (!touchCalibrated_) {
-    touchCalibrationSum_ += touchValue_;
-    if (++touchCalibrationSamples_ < AppConfig::TOUCH_CALIBRATION_SAMPLES) {
+    addTouchCalibrationSample(touchValue_, now);
+    return false;
+  }
+
+  const uint16_t releaseThreshold = touchThreshold(
+      touchBaseline_, AppConfig::TOUCH_RELEASE_PERCENT);
+  if (touchRecoveryPending_) {
+    if (touchValue_ <= releaseThreshold) {
+      touchRecoveryReleaseCandidate_ = false;
+      return false;
+    }
+    if (!touchRecoveryReleaseCandidate_) {
+      touchRecoveryReleaseCandidate_ = true;
+      touchRecoverySinceMs_ = now;
+      return false;
+    }
+    if (static_cast<uint32_t>(now - touchRecoverySinceMs_) <
+        AppConfig::TOUCH_RELEASE_DEBOUNCE_MS) {
       return false;
     }
 
-    touchBaseline_ = static_cast<uint16_t>(
-        touchCalibrationSum_ / AppConfig::TOUCH_CALIBRATION_SAMPLES);
-    touchCalibrationSum_ = 0;
-    touchCalibrationSamples_ = 0;
-    if (touchBaseline_ == 0) {
-      Serial.println("Falha ao calibrar touch; nova tentativa agendada");
-      return false;
-    }
-
-    touchBaselineScaled_ =
-        static_cast<uint32_t>(touchBaseline_) * AppConfig::TOUCH_BASELINE_SCALE;
-    touchButtonState_ = TouchButtonState(false, false, now);
-    touchCalibrated_ = true;
-    Serial.printf("Touch GPIO%u calibrado: base %u\n", AppConfig::TOUCH_PIN,
-                  touchBaseline_);
+    Serial.println("Touch liberado; iniciando nova calibracao");
+    touchRecoveryPending_ = false;
+    touchRecoveryReleaseCandidate_ = false;
+    resetTouchCalibration();
+    touchButtonState_ = TouchButtonState(false, false, now, now);
     return false;
   }
 
   if (touchNeedsRecalibration(touchButtonState_, now,
                               AppConfig::TOUCH_MAXIMUM_HOLD_MS)) {
-    Serial.println("Touch mantido por muito tempo; recalibrando entrada");
-    touchCalibrated_ = false;
-    touchCalibrationSum_ = touchValue_;
-    touchCalibrationSamples_ = 1;
-    touchBaseline_ = 0;
-    touchBaselineScaled_ = 0;
-    touchButtonState_ = TouchButtonState(false, false, now);
+    Serial.println("Touch mantido por muito tempo; aguardando liberacao");
+    touchRecoveryPending_ = true;
+    touchRecoveryReleaseCandidate_ = false;
     return false;
   }
 
@@ -206,6 +261,62 @@ bool LedController::readTouch(uint32_t now) {
                 state_.powerOn ? "ligado" : "desligado", touchValue_,
                 touchBaseline_);
   return true;
+}
+
+bool LedController::addTouchCalibrationSample(uint16_t value, uint32_t now) {
+  touchCalibrationValues_[touchCalibrationSamples_++] = value;
+  if (touchCalibrationSamples_ < AppConfig::TOUCH_CALIBRATION_SAMPLES) {
+    return false;
+  }
+
+  for (uint8_t index = 1; index < AppConfig::TOUCH_CALIBRATION_SAMPLES;
+       ++index) {
+    const uint16_t sortedValue = touchCalibrationValues_[index];
+    uint8_t position = index;
+    while (position > 0 &&
+           touchCalibrationValues_[position - 1U] > sortedValue) {
+      touchCalibrationValues_[position] =
+          touchCalibrationValues_[position - 1U];
+      --position;
+    }
+    touchCalibrationValues_[position] = sortedValue;
+  }
+
+  constexpr uint8_t first = AppConfig::TOUCH_CALIBRATION_TRIM_SAMPLES;
+  constexpr uint8_t last = AppConfig::TOUCH_CALIBRATION_SAMPLES -
+                           AppConfig::TOUCH_CALIBRATION_TRIM_SAMPLES;
+  uint32_t sum = 0;
+  for (uint8_t index = first; index < last; ++index) {
+    sum += touchCalibrationValues_[index];
+  }
+  const uint8_t retainedSamples = last - first;
+  const uint16_t baseline = static_cast<uint16_t>(sum / retainedSamples);
+  const uint16_t spread =
+      touchCalibrationValues_[last - 1U] - touchCalibrationValues_[first];
+  touchCalibrationSamples_ = 0;
+  if (!touchCalibrationValid(
+          baseline, spread,
+          AppConfig::TOUCH_CALIBRATION_MAX_SPREAD_PERCENT)) {
+    Serial.printf("Calibracao touch instavel: base %u, dispersao %u\n",
+                  baseline, spread);
+    return false;
+  }
+
+  touchBaseline_ = baseline;
+  touchBaselineScaled_ =
+      static_cast<uint32_t>(touchBaseline_) * AppConfig::TOUCH_BASELINE_SCALE;
+  touchButtonState_ = TouchButtonState(false, false, now, now);
+  touchCalibrated_ = true;
+  Serial.printf("Touch GPIO%u/T8 calibrado: base %u, dispersao %u\n",
+                AppConfig::TOUCH_PIN, touchBaseline_, spread);
+  return true;
+}
+
+void LedController::resetTouchCalibration() {
+  touchCalibrated_ = false;
+  touchCalibrationSamples_ = 0;
+  touchBaseline_ = 0;
+  touchBaselineScaled_ = 0;
 }
 
 void LedController::applyOutput() {

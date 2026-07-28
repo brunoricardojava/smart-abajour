@@ -109,11 +109,13 @@ void loop() {
   if (now - lastSerialUpdateMs >= AppConfig::SERIAL_INTERVAL_MS) {
     lastSerialUpdateMs = now;
     Serial.printf(
-        "Modo: %s | ADC: %u | Saida: %u%% | Touch: %u/%u | Wi-Fi: %s\n",
+        "Modo: %s | ADC: %u | Saida: %u%% | Touch: %u/%u (bruto %u) | "
+        "Wi-Fi: %s\n",
                   appState.controlMode == ControlMode::Potentiometer ? "pot"
                                                                      : "web",
                   appState.potentiometerAdc, appState.outputBrightness,
                   ledController.touchValue(), ledController.touchBaseline(),
+                  ledController.touchRawValue(),
                   networkManager.isConnected() ? "conectado" : "configurando");
   }
 

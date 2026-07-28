@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "AppConfig.h"
 #include "AppState.h"
 #include "input/TouchButtonState.h"
 
@@ -13,6 +14,7 @@ class LedController {
   void calibrateTouch();
   bool update();
   uint16_t touchValue() const { return touchValue_; }
+  uint16_t touchRawValue() const { return touchRawValue_; }
   uint16_t touchBaseline() const { return touchBaseline_; }
 
  private:
@@ -27,15 +29,22 @@ class LedController {
   ControlMode observedControlMode_ = ControlMode::Potentiometer;
   uint32_t observedWebInteractionRevision_ = 0;
   TouchButtonState touchButtonState_;
-  uint32_t touchCalibrationSum_ = 0;
   uint32_t touchBaselineScaled_ = 0;
+  uint16_t touchCalibrationValues_[AppConfig::TOUCH_CALIBRATION_SAMPLES] = {};
   uint16_t touchValue_ = 0;
+  uint16_t touchRawValue_ = 0;
   uint16_t touchBaseline_ = 0;
+  uint32_t touchRecoverySinceMs_ = 0;
   uint8_t touchCalibrationSamples_ = 0;
   uint8_t consecutiveInvalidTouchReadings_ = 0;
+  bool touchDriverReady_ = false;
   bool touchCalibrated_ = false;
+  bool touchRecoveryPending_ = false;
+  bool touchRecoveryReleaseCandidate_ = false;
 
   bool readPotentiometer(uint8_t samples);
   bool readTouch(uint32_t now);
+  bool addTouchCalibrationSample(uint16_t value, uint32_t now);
+  void resetTouchCalibration();
   void applyOutput();
 };

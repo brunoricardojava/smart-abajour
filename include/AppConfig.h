@@ -11,8 +11,8 @@
 #endif
 
 namespace AppConfig {
-constexpr uint8_t POT_PIN = 32;
-constexpr uint8_t LED_PIN = 25;
+constexpr uint8_t POT_PIN = 34;
+constexpr uint8_t LED_PIN = 23;
 constexpr uint8_t TOUCH_PIN = 33;
 constexpr uint8_t STATUS_LED_PIN = LED_BUILTIN;
 constexpr bool STATUS_LED_ACTIVE_HIGH = true;
@@ -30,10 +30,15 @@ constexpr uint16_t POT_TAKEOVER_THRESHOLD =
     (static_cast<uint32_t>(PWM_MAX) * POT_TAKEOVER_PERCENT + 99U) / 100U;
 constexpr uint8_t POT_TAKEOVER_CONFIRMATIONS = 2;
 constexpr uint32_t TOUCH_READ_INTERVAL_MS = 20;
+constexpr uint32_t TOUCH_FILTER_PERIOD_MS = 10;
+constexpr uint32_t TOUCH_FILTER_WARMUP_MS = 20;
 constexpr uint8_t TOUCH_CALIBRATION_SAMPLES = 32;
+constexpr uint8_t TOUCH_CALIBRATION_TRIM_SAMPLES = 4;
+constexpr uint8_t TOUCH_CALIBRATION_MAX_SPREAD_PERCENT = 15;
+constexpr uint8_t TOUCH_CALIBRATION_MAX_ATTEMPT_MULTIPLIER = 3;
 constexpr uint8_t TOUCH_PRESS_PERCENT = 70;
 constexpr uint8_t TOUCH_RELEASE_PERCENT = 98;
-constexpr uint32_t TOUCH_PRESS_DEBOUNCE_MS = 0;
+constexpr uint32_t TOUCH_PRESS_DEBOUNCE_MS = 20;
 constexpr uint32_t TOUCH_RELEASE_DEBOUNCE_MS = 300;
 constexpr uint8_t TOUCH_INVALID_WARNING_COUNT = 25;
 constexpr uint32_t TOUCH_MAXIMUM_HOLD_MS = 15000;
@@ -77,7 +82,10 @@ static_assert(TOUCH_PIN != LED_PIN,
 static_assert(TOUCH_PIN != STATUS_LED_PIN,
               "Touch input must not share the status LED pin");
 static_assert(TOUCH_CALIBRATION_SAMPLES > 0,
-              "Touch calibration requires at least one sample");
+               "Touch calibration requires at least one sample");
+static_assert(TOUCH_CALIBRATION_TRIM_SAMPLES * 2U <
+                  TOUCH_CALIBRATION_SAMPLES,
+              "Touch calibration trimming must preserve samples");
 static_assert(TOUCH_PRESS_PERCENT < TOUCH_RELEASE_PERCENT &&
                   TOUCH_RELEASE_PERCENT <= 100,
               "Touch thresholds must provide valid hysteresis");
