@@ -355,9 +355,10 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
   60 ms e so rearma depois de uma soltura estavel por 100 ms. Uma leitura que
   permanecer ativa por 15 segundos e recalibrada para evitar travamento por
   deriva ambiental ou ruido continuo.
+- Como GPIO32 e GPIO33 compartilham o periferico RTC, o firmware restaura T8
+  depois de cada lote ADC e aguarda o proximo intervalo antes de ler o touch.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
-- O Wi-Fi usa `WIFI_PS_NONE`: o modem sleep fazia o periferico touch retornar
-  zero na revisao 0 do ESP32 usada pela placa testada.
+- O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
 - Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada
   20 ms. Sob controle web ou com o LED desligado, usa 4 amostras a cada 40 ms.
 - O potenciometro assume apos variar 2% em duas leituras consecutivas.
@@ -369,9 +370,9 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 - O download OTA ocorre em uma tarefa separada e usa blocos de 4 KiB.
 - A imagem so e ativada depois que tamanho, target e SHA-256 forem validados.
 
-`Light sleep` e `deep sleep` nao sao usados porque interromperiam o servidor web,
-mDNS, Wi-Fi ou PWM. O modem sleep fica desativado especificamente para manter a
-leitura capacitiva funcional nesta revisao da placa.
+`Light sleep` manual e `deep sleep` nao sao usados porque interromperiam o
+servidor web, mDNS, Wi-Fi ou PWM. O modo `WIFI_PS_MAX_MODEM` tambem nao e
+habilitado por padrao porque pode perder trafego multicast em alguns roteadores.
 
 ## Acesso a porta serial no Ubuntu
 

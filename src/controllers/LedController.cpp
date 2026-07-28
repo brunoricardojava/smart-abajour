@@ -1,5 +1,7 @@
 #include "controllers/LedController.h"
 
+#include <driver/touch_sensor.h>
+
 #include "AppConfig.h"
 
 LedController::LedController(AppState& state) : state_(state) {}
@@ -49,13 +51,13 @@ bool LedController::update() {
   const uint8_t adcSamples =
       waitingForPhysicalInteraction ? AppConfig::ADC_IDLE_SAMPLES
                                     : AppConfig::ADC_ACTIVE_SAMPLES;
-  if (now - lastAdcReadMs_ >= adcInterval) {
-    lastAdcReadMs_ = now;
-    settingsChanged |= readPotentiometer(adcSamples);
-  }
   if (now - lastTouchReadMs_ >= AppConfig::TOUCH_READ_INTERVAL_MS) {
     lastTouchReadMs_ = now;
     settingsChanged |= readTouch(now);
+  }
+  if (now - lastAdcReadMs_ >= adcInterval) {
+    lastAdcReadMs_ = now;
+    settingsChanged |= readPotentiometer(adcSamples);
   }
 
   applyOutput();
@@ -67,6 +69,10 @@ bool LedController::readPotentiometer(uint8_t samples) {
   for (uint8_t sample = 0; sample < samples; ++sample) {
     sum += analogRead(AppConfig::POT_PIN);
   }
+
+  // ADC on GPIO32 retasks the shared RTC peripheral. Restore T8 now so it has
+  // a full sampling interval to settle before the next capacitive reading.
+  touch_pad_config(TOUCH_PAD_NUM8, SOC_TOUCH_PAD_THRESHOLD_MAX);
 
   state_.potentiometerAdc = sum / samples;
   state_.potentiometerBrightness = static_cast<uint8_t>(

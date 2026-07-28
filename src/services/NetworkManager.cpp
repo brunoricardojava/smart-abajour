@@ -14,8 +14,7 @@ void NetworkManager::begin() {
   setupAccessPointName_ = accessPointName;
 
   WiFi.mode(WIFI_STA);
-  // Modem sleep makes touchRead() return zero on early ESP32 revisions.
-  WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
   WiFi.setHostname(AppConfig::HOSTNAME);
   WiFi.setAutoReconnect(true);
 
