@@ -351,10 +351,10 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 - O PWM opera em 5 kHz no canal 0.
 - O indicador de status usa saida digital no GPIO2 e nao ocupa canal PWM.
 - A chave capacitiva usa o canal touch T8 no GPIO33, com leitura a cada 20 ms.
-- O touch calibra 32 amostras no inicio, usa histerese, confirma o toque por
-  20 ms e so rearma depois de uma soltura estavel por 300 ms. Uma leitura que
-  permanecer ativa por 15 segundos e recalibrada para evitar travamento por
-  deriva ambiental ou ruido continuo.
+- O touch calibra 32 amostras no inicio, usa histerese e aciona na primeira
+  amostra valida, em ate 20 ms. So rearma depois de uma soltura estavel por
+  300 ms. Uma leitura que permanecer ativa por 15 segundos e recalibrada para
+  evitar travamento por deriva ambiental ou ruido continuo.
 - Como GPIO32 e GPIO33 compartilham o periferico RTC, o firmware restaura T8
   depois de cada lote ADC e aguarda o proximo intervalo antes de ler o touch.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.

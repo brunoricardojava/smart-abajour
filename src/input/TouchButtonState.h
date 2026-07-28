@@ -37,9 +37,15 @@ constexpr TouchButtonResult updateTouchButton(
     TouchButtonState state, bool rawTouched, uint32_t nowMs,
     uint32_t pressDebounceMs, uint32_t releaseDebounceMs) {
   return rawTouched != state.candidateTouched
-             ? TouchButtonResult(
-                   TouchButtonState(state.stableTouched, rawTouched, nowMs),
-                   false)
+             ? rawTouched != state.stableTouched &&
+                       (rawTouched ? pressDebounceMs : releaseDebounceMs) == 0
+                   ? TouchButtonResult(
+                         TouchButtonState(rawTouched, rawTouched, nowMs),
+                         rawTouched)
+                   : TouchButtonResult(
+                         TouchButtonState(state.stableTouched, rawTouched,
+                                          nowMs),
+                         false)
          : rawTouched == state.stableTouched
              ? TouchButtonResult(state, false)
          : static_cast<uint32_t>(nowMs - state.candidateSinceMs) <
