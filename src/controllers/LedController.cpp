@@ -12,6 +12,17 @@ void LedController::begin() {
             AppConfig::PWM_RESOLUTION_BITS);
   ledcAttachPin(AppConfig::LED_PIN, AppConfig::PWM_CHANNEL);
   ledcWrite(AppConfig::PWM_CHANNEL, 0);
+
+  lastTouchReadMs_ = millis();
+  touchButtonState_ = TouchButtonState(false, false, lastTouchReadMs_);
+  for (uint8_t sample = 0; sample < AppConfig::TOUCH_CALIBRATION_SAMPLES;
+       ++sample) {
+    readTouch(millis());
+    if (sample + 1U < AppConfig::TOUCH_CALIBRATION_SAMPLES) {
+      delay(AppConfig::TOUCH_READ_INTERVAL_MS);
+    }
+  }
+  lastTouchReadMs_ = millis();
 }
 
 bool LedController::update() {
@@ -37,7 +48,11 @@ bool LedController::update() {
                                     : AppConfig::ADC_ACTIVE_SAMPLES;
   if (now - lastAdcReadMs_ >= adcInterval) {
     lastAdcReadMs_ = now;
-    settingsChanged = readPotentiometer(adcSamples);
+    settingsChanged |= readPotentiometer(adcSamples);
+  }
+  if (now - lastTouchReadMs_ >= AppConfig::TOUCH_READ_INTERVAL_MS) {
+    lastTouchReadMs_ = now;
+    settingsChanged |= readTouch(now);
   }
 
   applyOutput();
@@ -93,6 +108,82 @@ bool LedController::readPotentiometer(uint8_t samples) {
   observedControlMode_ = state_.controlMode;
   observedPowerOn_ = state_.powerOn;
   Serial.println("Potenciometro assumiu o controle");
+  return true;
+}
+
+bool LedController::readTouch(uint32_t now) {
+  touchValue_ = touchRead(AppConfig::TOUCH_PIN);
+
+  if (!touchCalibrated_) {
+    touchCalibrationSum_ += touchValue_;
+    if (++touchCalibrationSamples_ < AppConfig::TOUCH_CALIBRATION_SAMPLES) {
+      return false;
+    }
+
+    touchBaseline_ = static_cast<uint16_t>(
+        touchCalibrationSum_ / AppConfig::TOUCH_CALIBRATION_SAMPLES);
+    touchCalibrationSum_ = 0;
+    touchCalibrationSamples_ = 0;
+    if (touchBaseline_ == 0) {
+      Serial.println("Falha ao calibrar touch; nova tentativa agendada");
+      return false;
+    }
+
+    touchBaselineScaled_ =
+        static_cast<uint32_t>(touchBaseline_) * AppConfig::TOUCH_BASELINE_SCALE;
+    touchButtonState_ = TouchButtonState(false, false, now);
+    touchCalibrated_ = true;
+    Serial.printf("Touch GPIO%u calibrado: base %u\n", AppConfig::TOUCH_PIN,
+                  touchBaseline_);
+    return false;
+  }
+
+  if (touchNeedsRecalibration(touchButtonState_, now,
+                              AppConfig::TOUCH_MAXIMUM_HOLD_MS)) {
+    Serial.println("Touch mantido por muito tempo; recalibrando entrada");
+    touchCalibrated_ = false;
+    touchCalibrationSum_ = touchValue_;
+    touchCalibrationSamples_ = 1;
+    touchBaseline_ = 0;
+    touchBaselineScaled_ = 0;
+    touchButtonState_ = TouchButtonState(false, false, now);
+    return false;
+  }
+
+  const uint16_t threshold = touchThreshold(
+      touchBaseline_, touchButtonState_.stableTouched
+                          ? AppConfig::TOUCH_RELEASE_PERCENT
+                          : AppConfig::TOUCH_PRESS_PERCENT);
+  const bool rawTouched = touchValue_ <= threshold;
+  const TouchButtonResult result = updateTouchButton(
+      touchButtonState_, rawTouched, now, AppConfig::TOUCH_PRESS_DEBOUNCE_MS,
+      AppConfig::TOUCH_RELEASE_DEBOUNCE_MS);
+  touchButtonState_ = result.state;
+
+  if (!rawTouched && !touchButtonState_.stableTouched) {
+    const int32_t scaledValue =
+        static_cast<int32_t>(touchValue_) * AppConfig::TOUCH_BASELINE_SCALE;
+    const int32_t scaledBaseline =
+        static_cast<int32_t>(touchBaselineScaled_);
+    touchBaselineScaled_ = static_cast<uint32_t>(
+        scaledBaseline + (scaledValue - scaledBaseline) /
+                             AppConfig::TOUCH_BASELINE_FILTER_DIVISOR);
+    touchBaseline_ = static_cast<uint16_t>(
+        (touchBaselineScaled_ + AppConfig::TOUCH_BASELINE_SCALE / 2U) /
+        AppConfig::TOUCH_BASELINE_SCALE);
+  }
+
+  if (!result.pressed) {
+    return false;
+  }
+
+  state_.powerOn = !state_.powerOn;
+  observedPowerOn_ = state_.powerOn;
+  potentiometerReferenceAdc_ = state_.potentiometerAdc;
+  takeoverConfirmations_ = 0;
+  Serial.printf("Touch fisico: LED %s (leitura %u, base %u)\n",
+                state_.powerOn ? "ligado" : "desligado", touchValue_,
+                touchBaseline_);
   return true;
 }
 

@@ -8,6 +8,7 @@ e instala releases versionados publicados no GitHub.
 ## Recursos
 
 - Liga e desliga o LED pela interface web.
+- Liga e desliga fisicamente por um eletrodo capacitivo no GPIO33.
 - Usa uma interface dark responsiva por padrao.
 - Ajusta a intensidade manualmente entre 0 e 100%.
 - Alterna automaticamente para o ultimo controle movimentado.
@@ -29,6 +30,8 @@ mesma rede local pode controlar o LED ou iniciar uma atualizacao oficial.
 - Potenciometro linear de 10 kohms
 - LED verde
 - Resistor de 220 a 330 ohms
+- Eletrodo capacitivo, como uma pequena placa de cobre ou aluminio
+- Resistor de 1 kohm opcional para o eletrodo
 - Protoboard e jumpers
 
 A placa possui um LED azul controlavel no GPIO2 e um LED vermelho que normalmente
@@ -60,6 +63,18 @@ ESP32 GPIO25 ----- resistor 220/330 ohms ----- anodo do LED
 
 O anodo geralmente e a perna mais longa. O lado achatado do encapsulamento
 normalmente identifica o catodo. Nunca ligue o LED sem o resistor.
+
+### Chave capacitiva
+
+```text
+ESP32 GPIO33 (T8) ----- resistor 1 kohm opcional ----- eletrodo metalico
+```
+
+O eletrodo nao deve ser ligado ao 3V3 nem ao GND. Use um fio curto e mantenha-o
+afastado do LED controlado, do PWM e de fontes de ruido. O resistor em serie,
+instalado proximo ao ESP32, e opcional e ajuda a limitar descargas acidentais.
+Nao toque no eletrodo durante o primeiro segundo depois da inicializacao, quando
+o firmware mede automaticamente o valor de referencia antes de iniciar o Wi-Fi.
 
 ## Compilar e gravar
 
@@ -142,6 +157,12 @@ O botao principal liga ou desliga a saida. O slider e o potenciometro ficam
 sempre disponiveis: o ultimo que for movimentado assume automaticamente o
 controle e liga o LED. O movimento fisico precisa variar pelo menos 2% em duas
 leituras consecutivas, evitando que ruido eletrico roube o controle da web.
+
+Um toque no eletrodo do GPIO33 alterna entre ligado e desligado sem mudar a
+fonte nem o brilho selecionado. Manter o dedo sobre o eletrodo gera somente uma
+alternancia; e preciso soltar antes do proximo toque. O estado e salvo junto com
+as demais preferencias. Depois de desligar pelo toque, movimentar o
+potenciometro continua assumindo o controle e religando o LED.
 
 Quando a web assume, a posicao atual do potenciometro vira a nova referencia.
 Ele so volta a controlar depois de ser realmente movimentado. A pagina mostra
@@ -303,7 +324,9 @@ scripts/
   version.py                  injecao da versao e commit no build
 src/
   controllers/
-    LedController.*           leitura ADC e aplicacao do PWM
+    LedController.*           potenciometro, touch e aplicacao do PWM
+  input/
+    TouchButtonState.*        debounce e rearme testados no build
   services/
     NetworkManager.*          Wi-Fi, portal cativo e mDNS
     OtaUpdateService.*        consulta, download, validacao e rollback OTA
@@ -326,6 +349,11 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 - ADC e PWM usam 12 bits, com valores entre 0 e 4095.
 - O PWM opera em 5 kHz no canal 0.
 - O indicador de status usa saida digital no GPIO2 e nao ocupa canal PWM.
+- A chave capacitiva usa o canal touch T8 no GPIO33, com leitura a cada 20 ms.
+- O touch calibra 32 amostras no inicio, usa histerese, confirma o toque por
+  60 ms e so rearma depois de uma soltura estavel por 100 ms. Uma leitura que
+  permanecer ativa por 15 segundos e recalibrada para evitar travamento por
+  deriva ambiental ou ruido continuo.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
 - O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
 - Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada
@@ -335,7 +363,7 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
   segundos em segundo plano e a cada 500 ms durante uma operacao OTA.
 - Alteracoes do slider sao limitadas para evitar excesso de requisicoes.
 - Gravacoes de preferencias sao agrupadas e atrasadas em um segundo para
-  reduzir o desgaste da memoria flash.
+  reduzir o desgaste da memoria flash, inclusive quando o estado muda por toque.
 - O download OTA ocorre em uma tarefa separada e usa blocos de 4 KiB.
 - A imagem so e ativada depois que tamanho, target e SHA-256 forem validados.
 

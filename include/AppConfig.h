@@ -13,6 +13,7 @@
 namespace AppConfig {
 constexpr uint8_t POT_PIN = 32;
 constexpr uint8_t LED_PIN = 25;
+constexpr uint8_t TOUCH_PIN = 33;
 constexpr uint8_t STATUS_LED_PIN = LED_BUILTIN;
 constexpr bool STATUS_LED_ACTIVE_HIGH = true;
 constexpr uint32_t STATUS_LED_UPDATE_INTERVAL_MS = 10;
@@ -28,6 +29,15 @@ constexpr uint8_t POT_TAKEOVER_PERCENT = 2;
 constexpr uint16_t POT_TAKEOVER_THRESHOLD =
     (static_cast<uint32_t>(PWM_MAX) * POT_TAKEOVER_PERCENT + 99U) / 100U;
 constexpr uint8_t POT_TAKEOVER_CONFIRMATIONS = 2;
+constexpr uint32_t TOUCH_READ_INTERVAL_MS = 20;
+constexpr uint8_t TOUCH_CALIBRATION_SAMPLES = 32;
+constexpr uint8_t TOUCH_PRESS_PERCENT = 70;
+constexpr uint8_t TOUCH_RELEASE_PERCENT = 85;
+constexpr uint32_t TOUCH_PRESS_DEBOUNCE_MS = 60;
+constexpr uint32_t TOUCH_RELEASE_DEBOUNCE_MS = 100;
+constexpr uint32_t TOUCH_MAXIMUM_HOLD_MS = 15000;
+constexpr uint16_t TOUCH_BASELINE_SCALE = 256;
+constexpr uint8_t TOUCH_BASELINE_FILTER_DIVISOR = 32;
 constexpr uint32_t SETTINGS_SAVE_DELAY_MS = 1000;
 constexpr uint32_t SERIAL_INTERVAL_MS = 2000;
 
@@ -59,4 +69,17 @@ static_assert(STATUS_LED_PIN != POT_PIN,
               "Status LED must not share the potentiometer pin");
 static_assert(STATUS_LED_PIN != LED_PIN,
               "Status LED must not share the controlled LED pin");
+static_assert(TOUCH_PIN != POT_PIN,
+              "Touch input must not share the potentiometer pin");
+static_assert(TOUCH_PIN != LED_PIN,
+              "Touch input must not share the controlled LED pin");
+static_assert(TOUCH_PIN != STATUS_LED_PIN,
+              "Touch input must not share the status LED pin");
+static_assert(TOUCH_CALIBRATION_SAMPLES > 0,
+              "Touch calibration requires at least one sample");
+static_assert(TOUCH_PRESS_PERCENT < TOUCH_RELEASE_PERCENT &&
+                  TOUCH_RELEASE_PERCENT <= 100,
+              "Touch thresholds must provide valid hysteresis");
+static_assert(TOUCH_MAXIMUM_HOLD_MS > TOUCH_RELEASE_DEBOUNCE_MS,
+              "Touch recovery must exceed the debounce interval");
 }  // namespace AppConfig
