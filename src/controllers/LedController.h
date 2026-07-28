@@ -32,6 +32,7 @@ class LedController {
   uint16_t touchValue_ = 0;
   uint16_t touchBaseline_ = 0;
   uint8_t touchCalibrationSamples_ = 0;
+  uint8_t consecutiveInvalidTouchReadings_ = 0;
   bool touchCalibrated_ = false;
 
   bool readPotentiometer(uint8_t samples);

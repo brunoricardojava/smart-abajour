@@ -123,13 +123,17 @@ bool LedController::readPotentiometer(uint8_t samples) {
 bool LedController::readTouch(uint32_t now) {
   touchValue_ = touchRead(AppConfig::TOUCH_PIN);
   if (touchValue_ == 0) {
-    static uint32_t lastInvalidReadingLogMs = 0;
-    if (now - lastInvalidReadingLogMs >= AppConfig::SERIAL_INTERVAL_MS) {
-      lastInvalidReadingLogMs = now;
-      Serial.println("Leitura touch invalida (0); evento ignorado");
+    if (consecutiveInvalidTouchReadings_ <
+        AppConfig::TOUCH_INVALID_WARNING_COUNT) {
+      ++consecutiveInvalidTouchReadings_;
+      if (consecutiveInvalidTouchReadings_ ==
+          AppConfig::TOUCH_INVALID_WARNING_COUNT) {
+        Serial.println("Touch indisponivel; leituras zero consecutivas");
+      }
     }
     return false;
   }
+  consecutiveInvalidTouchReadings_ = 0;
 
   if (!touchCalibrated_) {
     touchCalibrationSum_ += touchValue_;
