@@ -73,8 +73,9 @@ ESP32 GPIO33 (T8) ----- resistor 1 kohm opcional ----- eletrodo metalico
 O eletrodo nao deve ser ligado ao 3V3 nem ao GND. Use um fio curto e mantenha-o
 afastado do LED controlado, do PWM e de fontes de ruido. O resistor em serie,
 instalado proximo ao ESP32, e opcional e ajuda a limitar descargas acidentais.
-Nao toque no eletrodo durante o primeiro segundo depois da inicializacao, quando
-o firmware mede automaticamente o valor de referencia antes de iniciar o Wi-Fi.
+Nao toque no eletrodo enquanto o LED azul estiver continuamente aceso durante a
+inicializacao. O firmware mede o valor de referencia depois de iniciar o Wi-Fi,
+nas mesmas condicoes eletricas usadas durante a operacao normal.
 
 ## Compilar e gravar
 
@@ -355,7 +356,8 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
   permanecer ativa por 15 segundos e recalibrada para evitar travamento por
   deriva ambiental ou ruido continuo.
 - A CPU opera em 160 MHz e o loop libera o processador por 4 ms entre ciclos.
-- O Wi-Fi usa `WIFI_PS_MIN_MODEM`, preservando baixa latencia, mDNS e multicast.
+- O Wi-Fi usa `WIFI_PS_NONE`: o modem sleep fazia o periferico touch retornar
+  zero na revisao 0 do ESP32 usada pela placa testada.
 - Com o potenciometro ativo, cada leitura usa a media de 8 amostras a cada
   20 ms. Sob controle web ou com o LED desligado, usa 4 amostras a cada 40 ms.
 - O potenciometro assume apos variar 2% em duas leituras consecutivas.
@@ -367,9 +369,9 @@ framework Arduino para ESP32. As bibliotecas externas sao `WiFiManager` e
 - O download OTA ocorre em uma tarefa separada e usa blocos de 4 KiB.
 - A imagem so e ativada depois que tamanho, target e SHA-256 forem validados.
 
-`Light sleep` manual e `deep sleep` nao sao usados porque interromperiam o
-servidor web, mDNS, Wi-Fi ou PWM. O modo `WIFI_PS_MAX_MODEM` tambem nao e
-habilitado por padrao porque pode perder trafego multicast em alguns roteadores.
+`Light sleep` e `deep sleep` nao sao usados porque interromperiam o servidor web,
+mDNS, Wi-Fi ou PWM. O modem sleep fica desativado especificamente para manter a
+leitura capacitiva funcional nesta revisao da placa.
 
 ## Acesso a porta serial no Ubuntu
 

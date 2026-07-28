@@ -10,6 +10,7 @@ class LedController {
   explicit LedController(AppState& state);
 
   void begin();
+  void calibrateTouch();
   bool update();
   uint16_t touchValue() const { return touchValue_; }
   uint16_t touchBaseline() const { return touchBaseline_; }

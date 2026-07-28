@@ -15,6 +15,9 @@ void LedController::begin() {
 
   lastTouchReadMs_ = millis();
   touchButtonState_ = TouchButtonState(false, false, lastTouchReadMs_);
+}
+
+void LedController::calibrateTouch() {
   for (uint8_t sample = 0; sample < AppConfig::TOUCH_CALIBRATION_SAMPLES;
        ++sample) {
     readTouch(millis());
@@ -113,6 +116,14 @@ bool LedController::readPotentiometer(uint8_t samples) {
 
 bool LedController::readTouch(uint32_t now) {
   touchValue_ = touchRead(AppConfig::TOUCH_PIN);
+  if (touchValue_ == 0) {
+    static uint32_t lastInvalidReadingLogMs = 0;
+    if (now - lastInvalidReadingLogMs >= AppConfig::SERIAL_INTERVAL_MS) {
+      lastInvalidReadingLogMs = now;
+      Serial.println("Leitura touch invalida (0); evento ignorado");
+    }
+    return false;
+  }
 
   if (!touchCalibrated_) {
     touchCalibrationSum_ += touchValue_;

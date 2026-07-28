@@ -73,6 +73,7 @@ void setup() {
   ledController.begin();
   otaUpdateService.begin();
   networkManager.begin();
+  ledController.calibrateTouch();
   otaUpdateService.markApplicationReady();
 }
 
